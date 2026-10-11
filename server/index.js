@@ -23,7 +23,8 @@ try {
 }
 
 const ROOT = path.join(__dirname, '..');
-const DATA = process.env.DATA_DIR || path.join(ROOT, 'data');
+const DATA =
+  process.env.DATA_DIR || (process.env.VERCEL ? path.join('/tmp', 'data') : path.join(ROOT, 'data'));
 const PORT = +process.env.PORT || 3000;
 const ST = [
   'Pending',
@@ -475,12 +476,24 @@ const DEFAULT_PW = !(process.env.ADMIN_PASSWORD || '').trim();
 console.log(
   `Admin sign-in -> username "${ADMIN_USER}" (not case-sensitive), password ${DEFAULT_PW ? 'is the DEFAULT "admin123" – set ADMIN_PASSWORD before going live!' : `loaded from ADMIN_PASSWORD (${ADMIN_PASSWORD.length} characters)`}`,
 );
-const salt = crypto.randomBytes(16),
+const salt = crypto.createHash('sha256').update(ADMIN_PASSWORD + '_vsd_salt').digest().subarray(0, 16),
   hash = (p) => crypto.scryptSync(String(p), salt, 32),
   PW = hash(ADMIN_PASSWORD);
 const SES = new Map(),
   HITS = new Map(),
   SESSION_MS = 8 * 3600e3;
+const makeSid = () => {
+  const rnd = crypto.randomBytes(16).toString('hex');
+  const sig = crypto.createHmac('sha256', PW).update(rnd).digest('hex').slice(0, 16);
+  return rnd + sig;
+};
+const checkSid = (val) => {
+  if (!val || val.length !== 48) return null;
+  const rnd = val.slice(0, 32);
+  const sig = val.slice(32);
+  const expected = crypto.createHmac('sha256', PW).update(rnd).digest('hex').slice(0, 16);
+  return sig === expected ? val : null;
+};
 const limited = (k, max, ms) => {
   const n = Date.now(),
     a = (HITS.get(k) || []).filter((t) => t > n - ms);
@@ -495,9 +508,13 @@ const ipOf = (r) =>
       .trim()) ||
   r.socket.remoteAddress;
 const sessionOf = (r) => {
-  const m = /(?:^|; )vsd_sid=([a-f0-9]{48})/.exec(r.headers.cookie || ''),
-    exp = m && SES.get(m[1]);
-  return exp && exp > Date.now() ? m[1] : null;
+  const m = /(?:^|; )vsd_sid=([a-f0-9]{48})/.exec(r.headers.cookie || '');
+  if (!m) return null;
+  const sid = m[1];
+  const exp = SES.get(sid);
+  if (exp && exp > Date.now()) return sid;
+  if (checkSid(sid)) return sid;
+  return null;
 };
 const cookie = (res, v, age) =>
   res.setHeader(
@@ -506,8 +523,16 @@ const cookie = (res, v, age) =>
   );
 
 /* ---------- http ---------- */
-const readBody = (req, max) =>
-  new Promise((ok, no) => {
+const readBody = (req, max) => {
+  if (req.body !== undefined && req.body !== null) {
+    if (typeof req.body === 'object') return Promise.resolve(req.body);
+    try {
+      return Promise.resolve(JSON.parse(req.body));
+    } catch {
+      return Promise.resolve({});
+    }
+  }
+  return new Promise((ok, no) => {
     let n = 0;
     const ch = [];
     req.on('data', (d) => {
@@ -525,6 +550,7 @@ const readBody = (req, max) =>
       }
     });
   });
+};
 async function handleApi(req, res, u) {
   const m = req.method,
     p = u.pathname;
@@ -579,7 +605,7 @@ async function handleApi(req, res, u) {
         .toLowerCase() === ADMIN_USER.toLowerCase() &&
       crypto.timingSafeEqual(hash(String(b.password || '').trim()), PW);
     if (!ok) throw E('Invalid credentials', 401);
-    const id = crypto.randomBytes(24).toString('hex');
+    const id = makeSid();
     SES.set(id, Date.now() + SESSION_MS);
     cookie(res, id, SESSION_MS / 1000);
     return { ok: true };
@@ -642,19 +668,27 @@ const send = (res, code, o) => {
   res.writeHead(code, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(o));
 };
-http
-  .createServer(async (req, res) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Referrer-Policy', 'same-origin');
-    try {
-      const u = new URL(req.url, 'http://localhost');
-      if (u.pathname.startsWith('/api/')) return send(res, 200, await handleApi(req, res, u));
-      if (req.method === 'GET' && serveStatic(res, decodeURIComponent(u.pathname))) return;
-      send(res, 404, { error: 'Not found' });
-    } catch (e) {
-      if (!e.http) console.error(e);
-      send(res, e.http || 500, { error: e.http ? e.message : 'Server error' });
-    }
-  })
-  .listen(PORT, () => console.log(`VSD server running on http://localhost:${PORT}`));
+async function requestHandler(req, res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  try {
+    const host = req.headers.host || 'localhost';
+    const proto = req.headers['x-forwarded-proto'] || 'http';
+    const u = new URL(req.url, `${proto}://${host}`);
+    if (u.pathname.startsWith('/api/')) return send(res, 200, await handleApi(req, res, u));
+    if (req.method === 'GET' && serveStatic(res, decodeURIComponent(u.pathname))) return;
+    send(res, 404, { error: 'Not found' });
+  } catch (e) {
+    if (!e.http) console.error(e);
+    send(res, e.http || 500, { error: e.http ? e.message : 'Server error' });
+  }
+}
+
+if (!process.env.VERCEL) {
+  http
+    .createServer(requestHandler)
+    .listen(PORT, () => console.log(`VSD server running on http://localhost:${PORT}`));
+}
+
+module.exports = { requestHandler };
