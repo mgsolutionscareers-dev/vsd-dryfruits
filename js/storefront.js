@@ -92,7 +92,15 @@ function render(k) {
     const it = items();
     b = `<div class=w>${heroV()}
 <div class=tr><div>🏅 Premium Quality</div><div>📦 Freshly Packed</div><div>🔒 Secure Payments</div><div>🚚 Pan-India Shipping</div><div>✅ Quality Checked</div></div>
-<h2 class=s>Shop by Category</h2><div class=cats>${D.cats.map((c) => `<div class=cat onclick="go('shop/${c[0]}')"><span>${cem(c)}</span>${c[0]}</div>`).join('')}<div class=cat onclick="go('shop/Combos')"><span>${cem(['Combos'])}</span>Combos</div></div>
+<h2 class=s>Shop by Category</h2><div class=cats>${(D.cats || [])
+      .filter((c) => c.on !== 0)
+      .map(
+        (c) =>
+          `<div class=cat onclick="go('shop/${encodeURIComponent(catName(c))}')"><span>${cem(c)}</span>${catName(c)}</div>`,
+      )
+      .join(
+        '',
+      )}<div class=cat onclick="go('shop/Combos')"><span>${cem(['Combos'])}</span>Combos</div></div>
 <h2 class=s>Popular Combos <a onclick="go('shop/Combos')">View all →</a></h2><div class=grid>${it
       .filter((x) => x.k == 'c')
       .map(card)
@@ -120,7 +128,8 @@ function render(k) {
     if (F.s == 'l') it.sort((a, b) => a.p - b.p);
     if (F.s == 'h') it.sort((a, b) => b.p - a.p);
     if (F.s == 'd') it.sort((a, b) => dsc(b.mrp, b.p) - dsc(a.mrp, a.p));
-    b = `<div class=w><h2 class=s>${qs == 'offers' ? 'Special Offers' : c || 'All Products'} <small>${it.length} items</small></h2><div class=cats><div class="cat ${!c ? 'on' : ''}" onclick="go('shop')"><span>🛍️</span>All</div>${[...D.cats, ['Combos', '🧺']].map((x) => `<div class="cat ${c == x[0] ? 'on' : ''}" onclick="go('shop/${x[0]}')"><span>${cem(x)}</span>${x[0]}</div>`).join('')}</div><div class=bar><select onchange="F.s=this.value;render()"><option value="">Sort: Popular</option><option value=l ${F.s == 'l' ? 'selected' : ''}>Price: Low → High</option><option value=h ${F.s == 'h' ? 'selected' : ''}>Price: High → Low</option><option value=d ${F.s == 'd' ? 'selected' : ''}>Highest Discount</option></select><label style="margin:0;display:flex;gap:6px;align-items:center"><input type=checkbox style=width:auto ${F.st ? 'checked' : ''} onchange="F.st=this.checked?1:0;render()">In stock only</label></div><div class=grid>${it.map(card).join('') || '<p>No products found.</p>'}</div></div>`;
+    const activeCats = (D.cats || []).filter((x) => x.on !== 0);
+    b = `<div class=w><h2 class=s>${qs == 'offers' ? 'Special Offers' : c || 'All Products'} <small>${it.length} items</small></h2><div class=cats><div class="cat ${!c ? 'on' : ''}" onclick="go('shop')"><span>🛍️</span>All</div>${[...activeCats, { name: 'Combos', emoji: '🧺' }].map((x) => `<div class="cat ${c == catName(x) ? 'on' : ''}" onclick="go('shop/${encodeURIComponent(catName(x))}')"><span>${cem(x)}</span>${catName(x)}</div>`).join('')}</div><div class=bar><select onchange="F.s=this.value;render()"><option value="">Sort: Popular</option><option value=l ${F.s == 'l' ? 'selected' : ''}>Price: Low → High</option><option value=h ${F.s == 'h' ? 'selected' : ''}>Price: High → Low</option><option value=d ${F.s == 'd' ? 'selected' : ''}>Highest Discount</option></select><label style="margin:0;display:flex;gap:6px;align-items:center"><input type=checkbox style=width:auto ${F.st ? 'checked' : ''} onchange="F.st=this.checked?1:0;render()">In stock only</label></div><div class=grid>${it.map(card).join('') || '<p>No products found.</p>'}</div></div>`;
   } else if (pp == 'orders') b = ordersV();
   else
     b = `<div class=w><div class=sec style=margin-top:20px><h2>Contact Us</h2><p>📍 D.No. 23-6-15, Opp: Axis Bank, Patnam Bazar, Guntur – 522003, A.P.<br>📞 88853 55666 · GSTIN 37BRLPK9740E1ZG<br>Proprietor: K. Vinod Kumar</p><a class=btn href="https://wa.me/${waNo()}" target=_blank>Chat on WhatsApp</a></div></div>`;

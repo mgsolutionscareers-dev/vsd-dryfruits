@@ -24,7 +24,8 @@ try {
 
 const ROOT = path.join(__dirname, '..');
 const DATA =
-  process.env.DATA_DIR || (process.env.VERCEL ? path.join('/tmp', 'data') : path.join(ROOT, 'data'));
+  process.env.DATA_DIR ||
+  (process.env.VERCEL ? path.join('/tmp', 'data') : path.join(ROOT, 'data'));
 const PORT = +process.env.PORT || 3000;
 const ST = [
   'Pending',
@@ -66,6 +67,44 @@ const w2g = (w) => {
   return m[2] && m[2].startsWith('k') ? Math.round(num * 1000) : Math.round(num);
 };
 
+const CI_DEFAULTS = {
+  'Dry Fruits': 'assets/images/k_dry.jpg',
+  Nuts: 'assets/images/k_nuts.jpg',
+  Seeds: 'assets/images/k_seeds.jpg',
+  Dates: 'assets/images/k_dates.jpg',
+  'Gift Box': 'assets/images/k_gift.jpg',
+  Combos: 'assets/images/k_combo.jpg',
+};
+
+function normCat(cat, idx) {
+  if (Array.isArray(cat)) {
+    const name = String(cat[0] || '').trim();
+    const emoji = String(cat[1] || '📦');
+    return {
+      id: idx + 1,
+      name,
+      desc: '',
+      img: CI_DEFAULTS[name] || '',
+      emoji,
+      on: 1,
+      0: name,
+      1: emoji,
+    };
+  }
+  const name = String(cat.name || cat.n || cat[0] || '').trim();
+  const emoji = String(cat.emoji || cat.e || cat[1] || '📦');
+  return {
+    id: +cat.id || idx + 1,
+    name,
+    desc: String(cat.desc || '').trim(),
+    img: String(cat.img || CI_DEFAULTS[name] || ''),
+    emoji,
+    on: cat.on !== undefined && cat.on !== null ? (cat.on ? 1 : 0) : 1,
+    0: name,
+    1: emoji,
+  };
+}
+
 /* ---------- data layer ---------- */
 const putC = (c) =>
   db
@@ -76,9 +115,12 @@ function getC() {
   if (r) {
     const c = JSON.parse(r.v);
     let dirty = false;
-    if (Array.isArray(c.cats) && !c.cats.some(([name]) => name === 'Gift Box')) {
-      c.cats.push(['Gift Box', '🎁']);
-      dirty = true;
+    if (Array.isArray(c.cats)) {
+      c.cats = c.cats.map((cat, idx) => normCat(cat, idx));
+      if (!c.cats.some((cat) => (cat.name || cat[0]) === 'Gift Box')) {
+        c.cats.push(normCat(['Gift Box', '🎁'], c.cats.length));
+        dirty = true;
+      }
     }
     if (!Array.isArray(c.giftboxes)) {
       c.giftboxes = [
@@ -120,6 +162,9 @@ function getC() {
     return c;
   }
   const c = JSON.parse(fs.readFileSync(path.join(__dirname, 'seed.json'), 'utf8'));
+  if (Array.isArray(c.cats)) {
+    c.cats = c.cats.map((cat, idx) => normCat(cat, idx));
+  }
   putC(c);
   return c;
 }
@@ -153,6 +198,9 @@ const publicCatalog = (c) => {
     }),
   );
   r.giftboxes = (c.giftboxes || []).filter((g) => g.on);
+  if (Array.isArray(r.cats)) {
+    r.cats = r.cats.filter((cat) => (cat.on !== undefined ? cat.on : 1));
+  }
   return r;
 };
 const clean = (s, n = 200) =>
@@ -378,12 +426,115 @@ function clearOrderHistory() {
   });
 }
 
+/* ---------- category management ---------- */
+function addCategory(b) {
+  return tx(() => {
+    const c = getC();
+    const name = clean(b.name || b.n, 60);
+    if (!name || name.length < 2) throw E('Category name must be at least 2 characters');
+    if (c.cats.some((x) => (x.name || x[0]).toLowerCase() === name.toLowerCase())) {
+      throw E(`Category "${name}" already exists`);
+    }
+    const maxId = Math.max(0, ...c.cats.map((x) => +x.id || 0));
+    const newCat = {
+      id: maxId + 1,
+      name,
+      desc: clean(b.desc, 500),
+      img: String(b.img || CI_DEFAULTS[name] || '').trim(),
+      emoji: clean(b.emoji || b.e || '📦', 10),
+      on: b.on !== undefined ? (b.on ? 1 : 0) : 1,
+      0: name,
+      1: clean(b.emoji || b.e || '📦', 10),
+    };
+    c.cats.push(newCat);
+    putC(c);
+    return { category: newCat, cats: c.cats };
+  });
+}
+
+function updateCategory(id, b) {
+  return tx(() => {
+    const c = getC();
+    const cat = c.cats.find((x) => x.id == id);
+    if (!cat) throw E('Category not found', 404);
+    const oldName = cat.name || cat[0];
+    const name = b.name !== undefined ? clean(b.name, 60) : oldName;
+    if (!name || name.length < 2) throw E('Category name must be at least 2 characters');
+    if (c.cats.some((x) => x.id != id && (x.name || x[0]).toLowerCase() === name.toLowerCase())) {
+      throw E(`Category "${name}" already exists`);
+    }
+    cat.name = name;
+    cat[0] = name;
+    if (b.desc !== undefined) cat.desc = clean(b.desc, 500);
+    if (b.img !== undefined) cat.img = String(b.img || '').trim();
+    if (b.emoji !== undefined) {
+      cat.emoji = clean(b.emoji, 10);
+      cat[1] = cat.emoji;
+    }
+    if (b.on !== undefined) cat.on = b.on ? 1 : 0;
+
+    // If category name was renamed, keep linked products linked
+    if (oldName !== name && Array.isArray(c.prods)) {
+      c.prods.forEach((p) => {
+        if (p.c === oldName) p.c = name;
+      });
+    }
+    putC(c);
+    return { category: cat, cats: c.cats };
+  });
+}
+
+function deleteCategory(id) {
+  return tx(() => {
+    const c = getC();
+    const idx = c.cats.findIndex((x) => x.id == id);
+    if (idx === -1) throw E('Category not found', 404);
+    const oldName = c.cats[idx].name || c.cats[idx][0];
+    c.cats.splice(idx, 1);
+    // Safe deletion: protect associated products and orders by keeping products intact
+    if (Array.isArray(c.prods)) {
+      c.prods.forEach((p) => {
+        if (p.c === oldName) p.c = 'General';
+      });
+    }
+    putC(c);
+    return { ok: true, cats: c.cats };
+  });
+}
+
+function toggleCategory(id) {
+  return tx(() => {
+    const c = getC();
+    const cat = c.cats.find((x) => x.id == id);
+    if (!cat) throw E('Category not found', 404);
+    cat.on = cat.on ? 0 : 1;
+    putC(c);
+    return { category: cat, cats: c.cats };
+  });
+}
+
 /* ---------- admin catalogue ---------- */
 function putCatalog(b) {
   return tx(() => {
     const c = getC();
     for (const k of ['cats', 'prods', 'combos', 'banners'])
       if (!Array.isArray(b[k])) throw E('Invalid data');
+    if (b.cats !== undefined) {
+      const seen = new Set();
+      c.cats = b.cats.map((cat, idx) => {
+        const name = clean(Array.isArray(cat) ? cat[0] : cat.name || cat.n || cat[0] || '', 60);
+        if (!name) throw E('Category name cannot be empty');
+        const lower = name.toLowerCase();
+        if (seen.has(lower)) throw E(`Duplicate category name: "${name}"`);
+        seen.add(lower);
+        const desc = clean(Array.isArray(cat) ? '' : cat.desc || '', 500);
+        const img = String(Array.isArray(cat) ? CI_DEFAULTS[name] || '' : cat.img || '').trim();
+        const emoji = clean(Array.isArray(cat) ? cat[1] : cat.emoji || cat.e || cat[1] || '📦', 10);
+        const on = Array.isArray(cat) ? 1 : cat.on !== undefined ? (cat.on ? 1 : 0) : 1;
+        const id = Array.isArray(cat) ? idx + 1 : +cat.id || idx + 1;
+        return { id, name, desc, img, emoji, on, 0: name, 1: emoji };
+      });
+    }
     if (b.giftboxes !== undefined && !Array.isArray(b.giftboxes)) throw E('Invalid giftboxes data');
     if (Array.isArray(b.giftboxes)) {
       b.giftboxes.forEach((g) => {
@@ -425,7 +576,6 @@ function putCatalog(b) {
       ticker: String(s.ticker || c.settings.ticker).slice(0, 600),
     };
     Object.assign(c, {
-      cats: b.cats,
       prods: b.prods,
       combos: b.combos,
       banners: b.banners,
@@ -476,7 +626,11 @@ const DEFAULT_PW = !(process.env.ADMIN_PASSWORD || '').trim();
 console.log(
   `Admin sign-in -> username "${ADMIN_USER}" (not case-sensitive), password ${DEFAULT_PW ? 'is the DEFAULT "admin123" – set ADMIN_PASSWORD before going live!' : `loaded from ADMIN_PASSWORD (${ADMIN_PASSWORD.length} characters)`}`,
 );
-const salt = crypto.createHash('sha256').update(ADMIN_PASSWORD + '_vsd_salt').digest().subarray(0, 16),
+const salt = crypto
+    .createHash('sha256')
+    .update(ADMIN_PASSWORD + '_vsd_salt')
+    .digest()
+    .subarray(0, 16),
   hash = (p) => crypto.scryptSync(String(p), salt, 32),
   PW = hash(ADMIN_PASSWORD);
 const SES = new Map(),
@@ -634,6 +788,14 @@ async function handleApi(req, res, u) {
   }
   if (m === 'POST' && p === '/api/admin/upload') return upload(b);
   if (m === 'POST' && p === '/api/admin/orders/clear') return clearOrderHistory();
+  if (m === 'POST' && p === '/api/admin/categories') return addCategory(b);
+  const catMatch = /^\/api\/admin\/categories\/(\d+)(?:\/toggle)?$/.exec(p);
+  if (catMatch) {
+    const cid = +catMatch[1];
+    if (m === 'PATCH' && p.endsWith('/toggle')) return toggleCategory(cid);
+    if (m === 'PUT') return updateCategory(cid, b);
+    if (m === 'DELETE') return deleteCategory(cid);
+  }
   const om = /^\/api\/admin\/orders\/([^/]+)$/.exec(p);
   if (m === 'PATCH' && om) return { order: patchOrder(decodeURIComponent(om[1]), b) };
   throw E('Not found', 404);

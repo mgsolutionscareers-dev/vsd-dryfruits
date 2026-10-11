@@ -33,7 +33,14 @@ const IM = {
     Kismis: IM.raisin,
     Anjeera: IM.anjeer,
   },
-  cem = (c) => (CI[c[0]] ? `<img src="${CI[c[0]]}" alt="">` : c[1]);
+  catName = (c) => (typeof c === 'object' && c ? c.name || c[0] || '' : String(c || '')),
+  catImg = (c) =>
+    typeof c === 'object' && c ? c.img || CI[catName(c)] || '' : CI[String(c || '')] || '',
+  catEmoji = (c) => (typeof c === 'object' && c ? c.emoji || c[1] || '📦' : '📦'),
+  cem = (c) => {
+    const img = catImg(c);
+    return img ? `<img src="${img}" alt="${catName(c)}">` : catEmoji(c);
+  };
 const KEY = 'vsd_v3',
   ST = [
     'Pending',

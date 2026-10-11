@@ -37,6 +37,7 @@ function renderA(pg) {
     ['dash', '📊 Dashboard'],
     ['orders', '📦 Orders'],
     ['prods', '🛍️ Products'],
+    ['cats', '🏷️ Categories'],
     ['combos', '🧺 Combos'],
     ['giftboxes', '🎁 Gift Boxes'],
     ['inv', '📋 Inventory'],
@@ -49,6 +50,7 @@ function renderA(pg) {
       dash: aDash,
       orders: aOrders,
       prods: aProds,
+      cats: aCats,
       combos: aCombos,
       giftboxes: aGiftBoxes,
       inv: aInv,
@@ -409,6 +411,307 @@ const pt = (id) => {
       render();
     }
   };
+
+/* ---------- Category Management ---------- */
+let CAT_IMG = '';
+function aCats() {
+  const cats = D.cats || [];
+  const total = cats.length;
+  const active = cats.filter((c) => c.on !== 0).length;
+  const inactive = total - active;
+  const totalProds = D.prods.length;
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div>
+        <h2 style="margin:0">Category Management</h2>
+        <small style="color:var(--m)">Create, edit, activate/deactivate, and customize category images</small>
+      </div>
+      <button class="btn" onclick="catModal(0)">+ Add Category</button>
+    </div>
+
+    <div class="kp" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
+      <div><b>${total}</b><small>Total Categories</small></div>
+      <div><b>${active}</b><small>Active (Visible)</small></div>
+      <div><b>${inactive}</b><small>Inactive (Hidden)</small></div>
+      <div><b>${totalProds}</b><small>Total Products</small></div>
+    </div>
+
+    <div class="bar" style="margin-bottom:12px">
+      <input id="cat-search" placeholder="🔍 Search categories..." oninput="filterCats(this.value)" style="flex:1;max-width:320px">
+    </div>
+
+    <div class="sec" id="cat-table-wrap">
+      ${renderCatsTable(cats)}
+    </div>
+  `;
+}
+
+function renderCatsTable(cats) {
+  if (!cats || !cats.length) {
+    return `<p style="padding:24px;text-align:center;color:var(--m)">No categories found. Click "+ Add Category" to create one.</p>`;
+  }
+  return `
+    <div class="tw">
+      <table class="adm-table">
+        <thead>
+          <tr>
+            <th style="width:60px">Image</th>
+            <th>Category Name</th>
+            <th>Description</th>
+            <th style="text-align:center">Products</th>
+            <th style="text-align:center">Status</th>
+            <th style="text-align:right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="cat-tbody">
+          ${cats
+            .map((c, i) => {
+              const cid = c.id || i + 1;
+              const cname = c.name || c[0];
+              const cdesc = c.desc || '';
+              const cimg = catImg(c);
+              const cemj = catEmoji(c);
+              const pCount = D.prods.filter((p) => p.c === cname).length;
+              const isActive = c.on !== 0;
+
+              return `
+              <tr data-cat-id="${cid}">
+                <td>
+                  <div class="im cat-thumb" style="width:48px;height:48px;font-size:24px;border-radius:8px">
+                    ${cimg ? `<img src="${cimg}" alt="${cname}">` : cemj}
+                  </div>
+                </td>
+                <td>
+                  <b>${cname}</b>
+                </td>
+                <td style="max-width:260px;font-size:13px;color:var(--m)">
+                  ${cdesc || '<span style="opacity:0.5">—</span>'}
+                </td>
+                <td style="text-align:center">
+                  <span class="pill" style="background:var(--l);color:var(--t)">${pCount} item${pCount === 1 ? '' : 's'}</span>
+                </td>
+                <td style="text-align:center">
+                  <span class="pill ${isActive ? '' : 'r'}">${isActive ? '● Active' : '○ Inactive'}</span>
+                </td>
+                <td style="text-align:right;white-space:nowrap">
+                  <button class="btn sm" onclick="catModal(${cid})">Edit</button>
+                  <button class="btn o sm" onclick="toggleCat(${cid})">${isActive ? 'Deactivate' : 'Activate'}</button>
+                  <button class="btn rd sm" onclick="delCat(${cid})">Delete</button>
+                </td>
+              </tr>
+            `;
+            })
+            .join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function filterCats(query) {
+  const q = (query || '').trim().toLowerCase();
+  const rows = document.querySelectorAll('#cat-tbody tr');
+  rows.forEach((r) => {
+    const text = r.textContent.toLowerCase();
+    r.style.display = !q || text.includes(q) ? '' : 'none';
+  });
+}
+
+function catModal(id) {
+  const c = id ? D.cats.find((x) => x.id == id || (x.name || x[0]) == id) : null;
+  const isEdit = !!c;
+  const cid = c ? c.id || id : 0;
+  const cname = c ? c.name || c[0] || '' : '';
+  const cdesc = c ? c.desc || '' : '';
+  const cemoji = c ? c.emoji || c[1] || '🌰' : '🌰';
+  const con = c ? c.on !== 0 : true;
+  CAT_IMG = c ? c.img || '' : '';
+
+  modal(
+    `
+    <h2>${isEdit ? 'Edit Category' : 'Add New Category'}</h2>
+    <div id="cat-err" style="display:none;color:#d32f2f;background:#ffebee;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:13px"></div>
+
+    <div class="form-group">
+      <label class="form-label">Category Photo (optional)</label>
+      <div class="photo-upload-row">
+        <div class="im photo-preview-box" id="cat-img-prev">
+          ${CAT_IMG ? `<img src="${CAT_IMG}">` : cemoji}
+        </div>
+        <div class="photo-upload-actions">
+          <input type="file" id="cat-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="upCatFile(this)">
+          <button type="button" class="btn o sm" onclick="$('#cat-file').click()">📷 Choose / Replace Photo</button>
+          <button type="button" class="btn o sm rd" id="cat-rm-btn" onclick="clearCatImg()" style="${CAT_IMG ? '' : 'display:none'}">✕ Remove Photo</button>
+          <small style="color:var(--m);display:block">JPG, PNG or WebP · Max 5MB · Displayed on storefront</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="cat-name">Category Name <span style="color:#d32f2f">*</span></label>
+      <input id="cat-name" value="${cname.replace(/"/g, '&quot;')}" placeholder="e.g. Premium Dry Fruits, Exotic Berries">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="cat-desc">Description (optional)</label>
+      <textarea id="cat-desc" rows="3" placeholder="Brief description of products in this category...">${cdesc}</textarea>
+    </div>
+
+    <div class="form-row-2">
+      <div class="form-group" style="flex:1">
+        <label class="form-label" for="cat-emoji">Fallback Emoji Icon</label>
+        <input id="cat-emoji" value="${cemoji}" placeholder="e.g. 🌰, 🥜, 🌻, 🌴">
+      </div>
+      <div class="form-group" style="flex:1;display:flex;align-items:flex-end">
+        <label class="check-label" style="margin-bottom:8px">
+          <input type="checkbox" id="cat-on" style="width:auto" ${con ? 'checked' : ''}>
+          <span>Active (visible on website)</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="wizard-actions" style="margin-top:16px">
+      <button type="button" class="btn o" onclick="cl()">Cancel</button>
+      <button type="button" class="btn" onclick="saveCat(${cid})">${isEdit ? 'Save Changes' : 'Create Category'}</button>
+    </div>
+  `,
+    'wide',
+  );
+}
+
+function upCatFile(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  uploadFile(f)
+    .then((url) => {
+      CAT_IMG = url;
+      const el = $('#cat-img-prev');
+      if (el) el.innerHTML = `<img src="${url}">`;
+      const rm = $('#cat-rm-btn');
+      if (rm) rm.style.display = 'inline-block';
+    })
+    .catch(() => {});
+}
+
+function clearCatImg() {
+  CAT_IMG = '';
+  const emoji = $('#cat-emoji') ? $('#cat-emoji').value.trim() || '📦' : '📦';
+  const el = $('#cat-img-prev');
+  if (el) el.innerHTML = emoji;
+  const rm = $('#cat-rm-btn');
+  if (rm) rm.style.display = 'none';
+}
+
+function saveCat(id) {
+  const errEl = $('#cat-err');
+  const showErr = (msg) => {
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    } else {
+      toast(msg);
+    }
+  };
+
+  const name = ($('#cat-name').value || '').trim();
+  if (name.length < 2) return showErr('Please enter a category name of at least 2 characters');
+
+  // Prevent duplicate category names (case-insensitive)
+  const isDup = D.cats.some(
+    (x) => (id ? x.id != id : true) && (x.name || x[0]).toLowerCase() === name.toLowerCase(),
+  );
+  if (isDup) return showErr(`Category "${name}" already exists. Please choose a different name.`);
+
+  const desc = ($('#cat-desc').value || '').trim();
+  const emoji = ($('#cat-emoji').value || '').trim() || '📦';
+  const on = $('#cat-on').checked ? 1 : 0;
+  const img = CAT_IMG;
+
+  const existing = id ? D.cats.find((x) => x.id == id || (x.name || x[0]) == id) : null;
+  if (existing) {
+    const oldName = existing.name || existing[0];
+    existing.name = name;
+    existing[0] = name;
+    existing.desc = desc;
+    existing.emoji = emoji;
+    existing[1] = emoji;
+    existing.on = on;
+    existing.img = img;
+    // If name changed, rename in products
+    if (oldName !== name) {
+      D.prods.forEach((p) => {
+        if (p.c === oldName) p.c = name;
+      });
+    }
+  } else {
+    const maxId = Math.max(0, ...D.cats.map((x) => +x.id || 0));
+    D.cats.push({
+      id: maxId + 1,
+      name,
+      desc,
+      emoji,
+      img,
+      on,
+      0: name,
+      1: emoji,
+    });
+  }
+
+  save();
+  cl();
+  render();
+  toast(existing ? `Category "${name}" updated` : `Category "${name}" created`);
+}
+
+function toggleCat(id) {
+  const cat = D.cats.find((x) => x.id == id || (x.name || x[0]) == id);
+  if (!cat) return toast('Category not found');
+  cat.on = cat.on ? 0 : 1;
+  save();
+  render();
+  toast(`Category "${cat.name || cat[0]}" is now ${cat.on ? 'Active' : 'Inactive'}`);
+}
+
+function delCat(id) {
+  const cat = D.cats.find((x) => x.id == id || (x.name || x[0]) == id);
+  if (!cat) return toast('Category not found');
+  const catName = cat.name || cat[0];
+  const linked = D.prods.filter((p) => p.c === catName).length;
+
+  modal(`
+    <h2>Delete Category</h2>
+    <p>Are you sure you want to delete category <b>${catName}</b>?</p>
+    ${
+      linked > 0
+        ? `<div style="background:#fff3cd;color:#856404;padding:12px;border-radius:8px;margin:12px 0;font-size:13px;line-height:1.5">
+            ⚠️ <b>${linked} product(s)</b> currently belong to this category.<br>
+            Deleting this category will <b>keep all products and orders intact</b>. These products will be reassigned to <i>General</i>.
+          </div>`
+        : `<p style="font-size:13px;color:var(--m)">This category has no assigned products.</p>`
+    }
+    <div class="wizard-actions" style="margin-top:16px">
+      <button class="btn o" onclick="cl()">Cancel</button>
+      <button class="btn rd" onclick="confirmDelCat(${id})">Yes, Delete Category</button>
+    </div>
+  `);
+}
+
+function confirmDelCat(id) {
+  const idx = D.cats.findIndex((x) => x.id == id || (x.name || x[0]) == id);
+  if (idx === -1) return toast('Category not found');
+  const catName = D.cats[idx].name || D.cats[idx][0];
+  // Reassign products safely to General
+  D.prods.forEach((p) => {
+    if (p.c === catName) p.c = 'General';
+  });
+  D.cats.splice(idx, 1);
+  save();
+  cl();
+  render();
+  toast(`Category "${catName}" deleted safely`);
+}
+
 function aCombos() {
   return `<h2>Combos</h2><div class=bar><button class=btn onclick="cf(0)">+ Create combo</button></div><div class=sec><div class=tw><table><tr><th></th><th>Name</th><th>Contains</th><th>MRP</th><th>Price</th><th>Available</th><th></th></tr>${D.combos.map((c) => `<tr><td class=tn style=font-size:26px>${ev(c)}</td><td>${c.n}</td><td>${c.items.map(([p, v, q]) => q + '×' + P(p).n.split(' ')[0] + ' ' + P(p).v[v].w).join(', ')}</td><td>${fm(cmrp(c))}</td><td>${fm(c.p)}</td><td>${cav(c)}</td><td><button class="btn sm" onclick="cf(${c.id})">Edit</button> <button class="btn o sm" onclick="D.combos.find(x=>x.id==${c.id}).on^=1;save();render()">${c.on ? 'Hide' : 'Show'}</button> <button class="btn rd sm" onclick="if(confirm('Delete?')){D.combos=D.combos.filter(x=>x.id!=${c.id});save();render()}">Del</button></td></tr>`).join('') || '<tr><td>No combos yet.</td></tr>'}</table></div></div>`;
 }
@@ -700,14 +1003,18 @@ function saveSet() {
 /* ---- Add / edit product: 3-step wizard  (1 details -> 2 weights & prices -> 3 review & publish) ---- */
 let W = {};
 const g2w = (g) => (g >= 1000 && g % 1000 == 0 ? [g / 1000, 'kg'] : [g, 'g']);
+
 function pf(id) {
   const p = id ? P(id) : null;
   IMG = p ? p.img || '' : '';
+  const firstCat = (D.cats || []).find((c) => (c.name || c[0]) !== 'Gift Box');
+  const defCat = firstCat ? firstCat.name || firstCat[0] : 'Dry Fruits';
+
   W = {
     id,
     step: 1,
     n: p ? p.n : '',
-    c: p ? p.c : (D.cats.find((c) => c[0] !== 'Gift Box') || ['Nuts'])[0],
+    c: p ? p.c : defCat,
     e: p ? p.e : '🌰',
     f: p && p.f ? 1 : 0,
     on: p && p.on === 0 ? 0 : 1,
@@ -726,14 +1033,15 @@ function pf(id) {
   };
   wz();
 }
+
 function wRead() {
-  W.n = $('#wn').value.trim();
-  W.c = $('#wc').value;
-  W.e = $('#we').value || '📦';
-  W.f = $('#wf').checked ? 1 : 0;
-  W.on = $('#wo').checked ? 1 : 0;
-  W.img = IMG;
+  if ($('#wn')) W.n = $('#wn').value.trim();
+  if ($('#wc')) W.c = $('#wc').value;
+  if ($('#we')) W.e = $('#we').value.trim() || '🌰';
+  if ($('#wf')) W.f = $('#wf').checked ? 1 : 0;
+  if ($('#wo')) W.on = $('#wo').checked ? 1 : 0;
 }
+
 const wv = (i, k, val) => {
     W.v[i][k] = val === '' ? '' : +val;
     wPrev();
@@ -752,6 +1060,7 @@ const wv = (i, k, val) => {
     W.v.splice(i, 1);
     wz();
   };
+
 function wCheck() {
   if (W.n.length < 2) return 'Enter the product name';
   const seen = {};
@@ -765,6 +1074,7 @@ function wCheck() {
   }
   return '';
 }
+
 function wGo(n) {
   if (W.step == 1) wRead();
   if (n >= 2 && W.n.length < 2) return toast('Enter the product name first');
@@ -775,6 +1085,7 @@ function wGo(n) {
   W.step = n;
   wz();
 }
+
 function wPrev() {
   const e = $('#wprev');
   if (!e) return;
@@ -786,42 +1097,226 @@ function wPrev() {
         `<div>${wl(r.g)} → <b>${fm(+r.p)}</b>${+r.mrp > +r.p ? ` <small><s>${fm(+r.mrp)}</s> ${dsc(+r.mrp, +r.p)}% off</small>` : ''}</div>`,
     );
   e.innerHTML =
-    '<small>Customers will see:</small>' +
+    '<small style="font-weight:600;display:block;margin-bottom:4px">Customers will see:</small>' +
     (l.join('') || '<div><small>Fill in a weight and price above</small></div>');
 }
+
+function upProdPhoto(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  uploadFile(f)
+    .then((url) => {
+      IMG = url;
+      W.img = url;
+      const el = $('#wp');
+      if (el) el.innerHTML = `<img src="${url}">`;
+      const rm = $('#wp-rm');
+      if (rm) rm.style.display = 'inline-block';
+    })
+    .catch(() => {});
+}
+
+function clearProdPhoto() {
+  IMG = '';
+  W.img = '';
+  const el = $('#wp');
+  if (el) el.innerHTML = W.e || '🌰';
+  const rm = $('#wp-rm');
+  if (rm) rm.style.display = 'none';
+}
+
 function wz() {
   const S = ['Product details', 'Weights & prices', 'Review & publish'];
   let b = '';
-  if (W.step == 1)
-    b = `<label>Product photo</label><div class=bar><div class=im id=wp style="width:76px;height:76px;font-size:34px">${ev({ img: W.img, e: W.e })}</div><input type=file accept="image/*" onchange="up(this,'wp')"></div><label>Product name</label><input id=wn value="${W.n}" placeholder="e.g. Premium Almonds"><div class=bar><div style=flex:1><label>Category</label><select id=wc>${D.cats
-      .filter((c) => c[0] !== 'Gift Box')
-      .map((c) => `<option ${W.c == c[0] ? 'selected' : ''}>${c[0]}</option>`)
-      .join(
-        '',
-      )}</select></div><div style=flex:1><label>Emoji (shown when there is no photo)</label><input id=we value="${W.e}"></div></div><label style=display:flex;gap:6px><input type=checkbox id=wf style=width:auto ${W.f ? 'checked' : ''}>Show in Featured products</label><label style=display:flex;gap:6px><input type=checkbox id=wo style=width:auto ${W.on ? 'checked' : ''}>Show on website</label><p><button class=btn onclick="wGo(2)">Next: weights & prices →</button></p>`;
-  if (W.step == 2)
-    b = `<p><small>Add every weight you sell and its price. Customers choose a weight and see the price. <b>Stock</b> = number of packs you have of that weight.</small></p><div class=tw><table><tr><th>Weight</th><th>MRP ₹</th><th>Selling price ₹</th><th>Stock (packs)</th><th>Low-stock alert at</th><th></th></tr>${W.v
-      .map((r, i) => {
-        const [q, u] = g2w(r.g);
-        return `<tr><td><input id=wq${i} type=number min=1 step=any value="${r.g ? q : ''}" style=width:76px onchange="wU(${i})"> <select id=wu${i} style=width:auto onchange="wU(${i})"><option ${u == 'g' ? 'selected' : ''}>g</option><option ${u == 'kg' ? 'selected' : ''}>kg</option></select></td><td><input type=number min=0 value="${r.mrp}" style=width:84px onchange="wv(${i},'mrp',this.value)"></td><td><input type=number min=0 value="${r.p}" style=width:84px onchange="wv(${i},'p',this.value)"></td><td><input type=number min=0 value="${r.s !== undefined && r.s !== null ? r.s : 0}" style=width:76px onchange="wv(${i},'s',this.value)"></td><td><input type=number min=0 value="${r.low !== undefined && r.low !== null ? r.low : 10}" style=width:76px onchange="wv(${i},'low',this.value)"></td><td>${W.v.length > 1 ? `<button class="btn rd sm" onclick="wDel(${i})">✕</button>` : ''}</td></tr>`;
-      })
-      .join('')}</table></div><div class=bar><small>Quick add:</small>${[100, 250, 500, 1000]
-      .filter((g) => !W.v.some((r) => r.g == g))
-      .map((g) => `<button class="btn o sm" onclick="wAdd(${g})">${wl(g)}</button>`)
-      .join(
-        '',
-      )}<button class="btn o sm" onclick="wAdd(0)">+ Other weight</button></div><div class=sec id=wprev style=margin:10px 0></div><div class=bar><button class="btn o" onclick="wGo(1)">← Back</button><button class=btn onclick="wGo(3)">Next: review →</button></div>`;
+
+  if (W.step == 1) {
+    b = `
+      <div class="form-group">
+        <label class="form-label">Product Photo (optional)</label>
+        <div class="photo-upload-row">
+          <div class="im photo-preview-box" id="wp">
+            ${ev({ img: W.img, e: W.e || '🌰' })}
+          </div>
+          <div class="photo-upload-actions">
+            <input type="file" id="wp-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="upProdPhoto(this)">
+            <button type="button" class="btn o sm" onclick="$('#wp-file').click()">📷 Choose / Replace Photo</button>
+            <button type="button" class="btn o sm rd" id="wp-rm" onclick="clearProdPhoto()" style="${W.img ? '' : 'display:none'}">✕ Remove Photo</button>
+            <small style="color:var(--m);display:block">JPG, PNG or WebP · Max 5MB</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="wn">Product Name <span style="color:#d32f2f">*</span></label>
+        <input id="wn" value="${(W.n || '').replace(/"/g, '&quot;')}" placeholder="e.g. Premium California Almonds">
+      </div>
+
+      <div class="form-row-2">
+        <div class="form-group" style="flex:1">
+          <label class="form-label" for="wc">Category <span style="color:#d32f2f">*</span></label>
+          <select id="wc">
+            ${(D.cats || [])
+              .filter((c) => (c.name || c[0]) !== 'Gift Box')
+              .map((c) => {
+                const cname = c.name || c[0];
+                return `<option value="${cname}" ${W.c === cname ? 'selected' : ''}>${cname}</option>`;
+              })
+              .join('')}
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label" for="we">Emoji (fallback icon)</label>
+          <input id="we" value="${W.e || '🌰'}" placeholder="e.g. 🌰, 🥜">
+        </div>
+      </div>
+
+      <div class="form-options">
+        <label class="check-label">
+          <input type="checkbox" id="wf" style="width:auto" ${W.f ? 'checked' : ''}>
+          <span>Show in Featured products on homepage</span>
+        </label>
+        <label class="check-label">
+          <input type="checkbox" id="wo" style="width:auto" ${W.on ? 'checked' : ''}>
+          <span>Show on website (Active)</span>
+        </label>
+      </div>
+
+      <div class="wizard-actions">
+        <button type="button" class="btn o" onclick="cl()">Cancel</button>
+        <button type="button" class="btn" onclick="wGo(2)">Next: Weights & Prices →</button>
+      </div>
+    `;
+  }
+
+  if (W.step == 2) {
+    b = `
+      <p style="margin-bottom:12px">
+        <small>Add every weight you sell and its price. Customers choose a weight and see the price. <b>Stock</b> = number of packs you have of that weight.</small>
+      </p>
+
+      <div class="var-editor">
+        <div class="var-header">
+          <div style="flex:1.4">Weight Size</div>
+          <div style="flex:1">MRP (₹)</div>
+          <div style="flex:1">Selling (₹) *</div>
+          <div style="flex:1">Stock (packs)</div>
+          <div style="flex:1">Low Alert</div>
+          <div style="width:36px"></div>
+        </div>
+        ${W.v
+          .map((r, i) => {
+            const [q, u] = g2w(r.g);
+            return `
+            <div class="var-row">
+              <div class="var-field var-weight-field" style="flex:1.4">
+                <label class="var-field-label">Weight</label>
+                <div style="display:flex;gap:4px">
+                  <input id="wq${i}" type="number" min="1" step="any" value="${r.g ? q : ''}" onchange="wU(${i})" placeholder="100" style="flex:1">
+                  <select id="wu${i}" style="width:62px" onchange="wU(${i})">
+                    <option ${u === 'g' ? 'selected' : ''}>g</option>
+                    <option ${u === 'kg' ? 'selected' : ''}>kg</option>
+                  </select>
+                </div>
+              </div>
+              <div class="var-field" style="flex:1">
+                <label class="var-field-label">MRP (₹)</label>
+                <input type="number" min="0" value="${r.mrp}" placeholder="MRP" onchange="wv(${i},'mrp',this.value)">
+              </div>
+              <div class="var-field" style="flex:1">
+                <label class="var-field-label">Selling (₹) *</label>
+                <input type="number" min="0" value="${r.p}" placeholder="Price" onchange="wv(${i},'p',this.value)">
+              </div>
+              <div class="var-field" style="flex:1">
+                <label class="var-field-label">Stock</label>
+                <input type="number" min="0" value="${r.s !== undefined && r.s !== null ? r.s : 0}" placeholder="0" onchange="wv(${i},'s',this.value)">
+              </div>
+              <div class="var-field" style="flex:1">
+                <label class="var-field-label">Alert</label>
+                <input type="number" min="0" value="${r.low !== undefined && r.low !== null ? r.low : 10}" placeholder="10" onchange="wv(${i},'low',this.value)">
+              </div>
+              <div class="var-field var-del-wrap" style="width:auto;display:flex;align-items:flex-end">
+                ${W.v.length > 1 ? `<button type="button" class="btn rd sm" onclick="wDel(${i})" title="Remove">✕</button>` : ''}
+              </div>
+            </div>
+          `;
+          })
+          .join('')}
+      </div>
+
+      <div class="bar var-quick-add" style="margin-top:10px">
+        <small style="font-weight:600">Quick add:</small>
+        ${[100, 250, 500, 1000]
+          .filter((g) => !W.v.some((r) => r.g == g))
+          .map(
+            (g) =>
+              `<button type="button" class="btn o sm" onclick="wAdd(${g})">+ ${wl(g)}</button>`,
+          )
+          .join('')}
+        <button type="button" class="btn o sm" onclick="wAdd(0)">+ Other Weight</button>
+      </div>
+
+      <div class="sec" id="wprev" style="margin:12px 0"></div>
+
+      <div class="wizard-actions">
+        <button type="button" class="btn o" onclick="wGo(1)">← Back</button>
+        <button type="button" class="btn o" onclick="cl()">Cancel</button>
+        <button type="button" class="btn" onclick="wGo(3)">Next: Review →</button>
+      </div>
+    `;
+  }
+
   if (W.step == 3) {
     const v = [...W.v].sort((a, b) => a.g - b.g),
       f = v[0];
-    b = `<p>This is how customers will see it:</p><div style="max-width:230px;margin:auto;pointer-events:none">${card({ k: 'p', id: 0, n: W.n, c: W.c, e: ev({ img: W.img, e: W.e }), mrp: +f.mrp, p: +f.p, s: v.reduce((a, r) => a + (+r.s || 0), 0), low: 10, vv: v.map((r) => wl(r.g)).join(' · ') })}</div><div class=sec style=margin:10px 0>${v.map((r) => `${wl(r.g)} — <b>${fm(+r.p)}</b> <small>(MRP ${fm(+r.mrp)}) · stock ${+r.s || 0} packs · alert at ${+r.low || 0}</small>`).join('<br>')}</div><p><small>${W.on ? 'It will appear on the website straight away.' : 'It is set to HIDDEN – customers will not see it.'}</small></p><div class=bar><button class="btn o" onclick="wGo(2)">← Back</button><button class=btn onclick=wSave()>${W.id ? 'Save changes' : 'Add product to website'}</button></div>`;
+    b = `
+      <p style="margin-bottom:12px">This is how customers will see it:</p>
+      <div style="max-width:240px;margin:0 auto 14px;pointer-events:none">
+        ${card({
+          k: 'p',
+          id: 0,
+          n: W.n,
+          c: W.c,
+          e: ev({ img: W.img, e: W.e || '🌰' }),
+          mrp: +f.mrp,
+          p: +f.p,
+          s: v.reduce((a, r) => a + (+r.s || 0), 0),
+          low: 10,
+          vv: v.map((r) => wl(r.g)).join(' · '),
+        })}
+      </div>
+      <div class="sec" style="margin:12px 0;font-size:13px;line-height:1.6">
+        ${v
+          .map(
+            (r) =>
+              `${wl(r.g)} — <b>${fm(+r.p)}</b> <small>(MRP ${fm(+r.mrp)}) · stock ${+r.s || 0} packs · alert at ${+r.low || 0}</small>`,
+          )
+          .join('<br>')}
+      </div>
+      <p>
+        <small style="color:var(--m)">${W.on ? '✔ Will appear on the website straight away.' : '● Set to HIDDEN – customers will not see it.'}</small>
+      </p>
+      <div class="wizard-actions">
+        <button type="button" class="btn o" onclick="wGo(2)">← Back</button>
+        <button type="button" class="btn o" onclick="cl()">Cancel</button>
+        <button type="button" class="btn" onclick="wSave()">${W.id ? 'Save Changes' : 'Add Product to Website'}</button>
+      </div>
+    `;
   }
+
   modal(
-    `<h2>${W.id ? 'Edit' : 'Add'} product</h2><div class=steps>${S.map((s, i) => `<span class="${W.step == i + 1 ? 'on' : W.step > i + 1 ? 'done' : ''}">${i + 1}. ${s}</span>`).join('')}</div>${b}`,
+    `
+    <h2>${W.id ? 'Edit' : 'Add'} Product</h2>
+    <div class="steps">
+      ${S.map((s, i) => `<span class="${W.step == i + 1 ? 'on' : W.step > i + 1 ? 'done' : ''}">${i + 1}. ${s}</span>`).join('')}
+    </div>
+    ${b}
+  `,
     'wide',
   );
+
   if (W.step == 2) wPrev();
 }
+
 function wSave() {
   const e = wCheck();
   if (e) return toast(e);

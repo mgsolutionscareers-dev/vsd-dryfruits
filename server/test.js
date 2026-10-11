@@ -707,6 +707,110 @@ const { spawn } = require('child_process'),
     },
   );
 
+  await t(
+    'category management: add, edit, duplicate prevention, activate/deactivate, safe deletion',
+    async () => {
+      // 1. Unauthenticated check
+      const unauth = await call('POST', '/api/admin/categories', { name: 'Exotic Nuts' });
+      assert.equal(unauth.s, 401, 'Unauthenticated category creation must return 401');
+
+      // 2. Add valid category
+      const addRes = await call(
+        'POST',
+        '/api/admin/categories',
+        {
+          name: 'Exotic Berries',
+          desc: 'Finest hand-picked berries from around the world',
+          emoji: '🫐',
+          img: 'assets/images/k_dry.jpg',
+          on: 1,
+        },
+        ck,
+      );
+      assert.equal(addRes.s, 200, 'Adding valid category must return 200');
+      const newCatId = addRes.j.category.id;
+      assert.equal(addRes.j.category.name, 'Exotic Berries');
+      assert.equal(addRes.j.category.on, 1);
+
+      // 3. Duplicate name prevention (case-insensitive)
+      const dupRes = await call('POST', '/api/admin/categories', { name: 'exotic berries' }, ck);
+      assert.equal(dupRes.s, 400, 'Duplicate category name must return 400');
+
+      // 4. Empty name rejected
+      const emptyRes = await call('POST', '/api/admin/categories', { name: '' }, ck);
+      assert.equal(emptyRes.s, 400, 'Empty category name must return 400');
+
+      // 5. Verify customer visibility
+      let pubCat = (await call('GET', '/api/catalog')).j;
+      assert(
+        pubCat.cats.some((c) => (c.name || c[0]) === 'Exotic Berries'),
+        'Active category must appear in customer catalog',
+      );
+
+      // 6. Deactivate category
+      const toggleRes = await call('PATCH', `/api/admin/categories/${newCatId}/toggle`, null, ck);
+      assert.equal(toggleRes.s, 200, 'Toggling category must return 200');
+      assert.equal(toggleRes.j.category.on, 0, 'Category status must be deactivated (0)');
+
+      // 7. Verify deactivated category is hidden from customer
+      pubCat = (await call('GET', '/api/catalog')).j;
+      assert(
+        !pubCat.cats.some((c) => (c.name || c[0]) === 'Exotic Berries'),
+        'Deactivated category must be hidden from customer catalog',
+      );
+
+      // 8. Re-activate category
+      await call('PATCH', `/api/admin/categories/${newCatId}/toggle`, null, ck);
+
+      // 9. Assign a product to this category and test edit/rename
+      const adminData = (await call('GET', '/api/admin/data', null, ck)).j;
+      const testProd = adminData.catalog.prods[0];
+      const origProdCat = testProd.c;
+      testProd.c = 'Exotic Berries';
+      await call('PUT', '/api/admin/catalog', adminData.catalog, ck);
+
+      // Edit category name from 'Exotic Berries' to 'Premium Berries'
+      const editRes = await call(
+        'PUT',
+        `/api/admin/categories/${newCatId}`,
+        { name: 'Premium Berries', desc: 'Updated description', on: 1 },
+        ck,
+      );
+      assert.equal(editRes.s, 200, 'Editing category must return 200');
+      assert.equal(editRes.j.category.name, 'Premium Berries');
+
+      // Check linked product was automatically updated to 'Premium Berries'
+      const adminDataAfterEdit = (await call('GET', '/api/admin/data', null, ck)).j;
+      const updatedProd = adminDataAfterEdit.catalog.prods.find((p) => p.id === testProd.id);
+      assert.equal(
+        updatedProd.c,
+        'Premium Berries',
+        'Linked product category must update upon category rename',
+      );
+
+      // 10. Safe deletion: delete category and verify linked product is safely reassigned to 'General'
+      const delRes = await call('DELETE', `/api/admin/categories/${newCatId}`, null, ck);
+      assert.equal(delRes.s, 200, 'Deleting category must return 200');
+
+      const adminDataAfterDel = (await call('GET', '/api/admin/data', null, ck)).j;
+      assert(
+        !adminDataAfterDel.catalog.cats.some((c) => c.id === newCatId),
+        'Deleted category must no longer exist',
+      );
+      const safeProd = adminDataAfterDel.catalog.prods.find((p) => p.id === testProd.id);
+      assert(safeProd, 'Product must not be deleted when its category is deleted');
+      assert.equal(
+        safeProd.c,
+        'General',
+        'Product category must safely fall back to General without data loss',
+      );
+
+      // Restore product category for remaining tests
+      safeProd.c = origProdCat;
+      await call('PUT', '/api/admin/catalog', adminDataAfterDel.catalog, ck);
+    },
+  );
+
   await t('starter catalogue is flagged as sample data', async () =>
     assert(cat.prods.every((p) => p.sample) && cat.combos.every((c) => c.sample)),
   );
