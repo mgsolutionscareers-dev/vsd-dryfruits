@@ -249,7 +249,7 @@ function pdv() {
       })
       .join(
         '',
-      )}</div>${p.v.length > 1 && p.v.some((v) => w2g(v.w) > 0) ? `<div class=bar><small>Or set your own weight</small><span class=q><button onclick="changeG(-${mn})">−</button><input type=number value="${dispG || ''}" placeholder=0 min=${mn} step=${mn} style="width:84px;border:0;text-align:center" onchange="setCustomG(this.value)"><button onclick="changeG(${mn})">+</button></span><small>grams</small></div>` : ''}<div class=sec style="margin:10px 0">${oos ? '<span class=no style="font-size:18px">● Out of stock – currently unavailable</span>' : !dispG && !hasVar ? '<span style=color:var(--m)>👆 Choose a weight above to see the price</span>' : canBuy ? `<small>${curV ? varLabel(curV) : wl(dispG)} of ${p.n}</small><div>${dispMrp > dispPrice ? `<s>${fm(dispMrp)}</s> ` : ''}<strong style="font-size:28px;color:var(--g)">${fm(dispPrice)}</strong> ${dsc(dispMrp, dispPrice) > 0 ? `<span class=pill>${dsc(dispMrp, dispPrice)}% OFF</span>` : ''}</div><span class=ok>● In stock</span>` : `<span class=no>● ${hasVar ? 'Out of stock' : 'This quantity is not available right now. Try a smaller weight.'}</span>`}</div><div class=bar><button class="btn ${canBuy ? '' : 'disabled'}" onclick="addProdVariant(0)">${oos ? 'Out of Stock' : dispG || hasVar ? 'Add to Cart' : 'Choose weight first'}</button><button class="btn gd ${canBuy ? '' : 'disabled'}" onclick="addProdVariant(1)">Buy Now</button></div><a class="btn o" style=text-decoration:none;display:block;text-align:center href="https://wa.me/${waNo()}?text=${encodeURIComponent('Hi, I want ' + (curV ? curV.w + ' ' : dispG ? wl(dispG) + ' ' : '') + p.n)}" target=_blank>💬 Ask on WhatsApp</a><p><small>✔ Premium quality · ✔ Hygienically packed · ✔ Delivery across India via India Post. Store in an airtight container in a cool, dry place.</small></p></div></div>`,
+      )}</div>${false ? `<div class=bar><small>Or set your own weight</small><span class=q><button onclick="changeG(-${mn})">−</button><input type=number value="${dispG || ''}" placeholder=0 min=${mn} step=${mn} style="width:84px;border:0;text-align:center" onchange="setCustomG(this.value)"><button onclick="changeG(${mn})">+</button></span><small>grams</small></div>` : ''}<div class=sec style="margin:10px 0">${oos ? '<span class=no style="font-size:18px">● Out of stock – currently unavailable</span>' : !dispG && !hasVar ? '<span style=color:var(--m)>👆 Choose a weight above to see the price</span>' : canBuy ? `<small>${curV ? varLabel(curV) : wl(dispG)} of ${p.n}</small><div>${dispMrp > dispPrice ? `<s>${fm(dispMrp)}</s> ` : ''}<strong style="font-size:28px;color:var(--g)">${fm(dispPrice)}</strong> ${dsc(dispMrp, dispPrice) > 0 ? `<span class=pill>${dsc(dispMrp, dispPrice)}% OFF</span>` : ''}</div><span class=ok>● In stock</span>` : `<span class=no>● ${hasVar ? 'Out of stock' : 'This quantity is not available right now. Try a smaller weight.'}</span>`}</div><div class=bar><button class="btn ${canBuy ? '' : 'disabled'}" onclick="addProdVariant(0)">${oos ? 'Out of Stock' : dispG || hasVar ? 'Add to Cart' : 'Choose weight first'}</button><button class="btn gd ${canBuy ? '' : 'disabled'}" onclick="addProdVariant(1)">Buy Now</button></div><a class="btn o" style=text-decoration:none;display:block;text-align:center href="https://wa.me/${waNo()}?text=${encodeURIComponent('Hi, I want ' + (curV ? curV.w + ' ' : dispG ? wl(dispG) + ' ' : '') + p.n)}" target=_blank>💬 Ask on WhatsApp</a><p><small>✔ Premium quality · ✔ Hygienically packed · ✔ Delivery across India via India Post. Store in an airtight container in a cool, dry place.</small></p></div></div>`,
   );
 }
 function changeG(d) {
@@ -459,16 +459,41 @@ const waUrl = (o) =>
 let hi = 0;
 const slideH = (x) =>
   `<div><small style=color:#ffd98a;letter-spacing:2px>${x.k || ''}</small><h1>${x.h}</h1><p>${x.d || ''}</p><div class=bar>${x.btn ? `<button class="btn gd" onclick="bgo(${x.id})">${x.btn}</button>` : ''}<a class="btn o" style="color:#fff;border-color:#fff;text-decoration:none" href="https://wa.me/${waNo()}" target=_blank>Order on WhatsApp</a></div></div><div class=bowl>${x.img ? `<img src="${x.img}" alt="" style="width:100%;display:block;border-radius:22px;box-shadow:0 20px 50px #0007">` : '🥣'}</div>`;
+/* Arrow button style is written inline so the arrows always show, even if the CSS file has no .harr rules */
+const ARR =
+  'position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:28px;line-height:1;cursor:pointer;z-index:5;display:flex;align-items:center;justify-content:center;padding:0';
 function heroV() {
   const b = D.banners.filter((x) => x.on);
   if (!b.length) return '';
   hi %= b.length;
-  return `<div class=hero id=hero>${slideH(b[hi])}${b.length > 1 ? `<div class=dots>${b.map((_, i) => `<i class="${i == hi ? 'on' : ''}" onclick="hi=${i};hup()"></i>`).join('')}</div>` : ''}</div>`;
+  return `<div class="hero${b.length > 1 ? ' hasarr' : ''}" id=hero style="position:relative">${b.length > 1 ? `<button type=button class="harr harr-l" onclick="hgo(-1)" aria-label="Previous banner" style="${ARR};left:12px">&#8249;</button><button type=button class="harr harr-r" onclick="hgo(1)" aria-label="Next banner" style="${ARR};right:12px">&#8250;</button>` : ''}${slideH(b[hi])}${b.length > 1 ? `<div class=dots>${b.map((_, i) => `<i class="${i == hi ? 'on' : ''}" onclick="hi=${i};hpause=Date.now()+10000;hup()"></i>`).join('')}</div>` : ''}</div>`;
 }
 const hup = () => {
   const h = $('#hero');
   if (h) h.outerHTML = heroV();
 };
+let hpause = 0;
+const hgo = (d) => {
+  const n = D.banners.filter((x) => x.on).length;
+  if (n < 2) return;
+  hi = (((hi + d) % n) + n) % n;
+  hpause = Date.now() + 10000;
+  hup();
+};
+let htx = 0;
+document.addEventListener(
+  'touchstart',
+  (e) => {
+    htx = e.target.closest && e.target.closest('#hero') ? e.touches[0].clientX : 0;
+  },
+  { passive: true },
+);
+document.addEventListener('touchend', (e) => {
+  if (!htx) return;
+  const dx = e.changedTouches[0].clientX - htx;
+  htx = 0;
+  if (Math.abs(dx) > 50) hgo(dx < 0 ? 1 : -1);
+});
 function bgo(id) {
   const l = (D.banners.find((b) => b.id == id).link || '').trim();
   if (/^https?:/.test(l)) window.open(l, '_blank');
