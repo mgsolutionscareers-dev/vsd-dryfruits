@@ -61,6 +61,7 @@ const ftr = () =>
 const go = (h) => {
   location.hash = '#/' + h;
   cl();
+  if (typeof toggleAdmDrawer === 'function') toggleAdmDrawer(false);
 };
 function sug(v) {
   const d = $('#dd');
@@ -123,8 +124,54 @@ function render(k) {
   } else if (pp == 'orders') b = ordersV();
   else
     b = `<div class=w><div class=sec style=margin-top:20px><h2>Contact Us</h2><p>📍 D.No. 23-6-15, Opp: Axis Bank, Patnam Bazar, Guntur – 522003, A.P.<br>📞 88853 55666 · GSTIN 37BRLPK9740E1ZG<br>Proprietor: K. Vinod Kumar</p><a class=btn href="https://wa.me/${waNo()}" target=_blank>Chat on WhatsApp</a></div></div>`;
-  $('#app').innerHTML = hdr() + b + ftr();
+  $('#app').innerHTML = hdr() + b + ftr() + custNav(pp, cc);
   k || window.scrollTo(0, 0);
+}
+function custNav(pp, cc) {
+  const isHome = pp === '';
+  const isShop = pp === 'shop' && cc !== 'Combos';
+  const isOrders = pp === 'orders';
+  const isCombos = pp === 'shop' && cc === 'Combos';
+
+  return `<nav class="mob-bottom-nav">
+    <button class="mbn-item ${isHome ? 'on' : ''}" onclick="go('')">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9.5L12 3l9 6.5V20a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9.5z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+      <span>Home</span>
+    </button>
+    <button class="mbn-item ${isShop ? 'on' : ''}" onclick="go('shop')">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <path d="M16 10a4 4 0 0 1-8 0"/>
+      </svg>
+      <span>Products</span>
+    </button>
+    <button class="mbn-item ${isOrders ? 'on' : ''}" onclick="go('orders')">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+      </svg>
+      <span>My Orders</span>
+    </button>
+    <button class="mbn-item" onclick="window.open(IP, '_blank')">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </svg>
+      <span>Track Order</span>
+    </button>
+    <button class="mbn-item ${isCombos ? 'on' : ''}" onclick="go('shop/Combos')">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+        <line x1="12" y1="22.08" x2="12" y2="12"/>
+      </svg>
+      <span>Combos</span>
+    </button>
+  </nav>`;
 }
 function bestS() {
   const m = {};

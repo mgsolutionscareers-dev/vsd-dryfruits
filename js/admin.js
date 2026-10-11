@@ -2,6 +2,20 @@
  * Admin panel: login, dashboard analytics, orders, products, combos, inventory, Excel export, invoice.
  */
 /* ADMIN */
+function toggleAdmDrawer(open) {
+  const sb = $('.sb');
+  const bd = $('.adm-backdrop');
+  if (open) {
+    sb && sb.classList.add('open');
+    bd && bd.classList.add('open');
+    document.body.classList.add('no-scroll');
+  } else {
+    sb && sb.classList.remove('open');
+    bd && bd.classList.remove('open');
+    document.body.classList.remove('no-scroll');
+  }
+}
+
 function renderA(pg) {
   if (!adm) {
     $('#app').innerHTML =
@@ -42,8 +56,70 @@ function renderA(pg) {
       banners: aBanners,
       settings: aSettings,
     }[pg] || aDash;
-  $('#app').innerHTML =
-    `<div class=adm><div class=sb><div class=logo><img class=brand src="assets/images/logo.webp" alt="VSD Admin" style="height:78px;margin:0 auto"></div>${M.map((m) => `<a class="${pg == m[0] ? 'on' : ''}" onclick="go('admin/${m[0]}')">${m[1]}</a>`).join('')}<a onclick="go('')">🌐 View store</a><a onclick="logout()">🚪 Logout</a></div><div class=ct>${fn()}</div></div>`;
+
+  const curTitle = M.find((m) => m[0] === pg)?.[1]?.slice(3) || 'Dashboard';
+
+  $('#app').innerHTML = `
+    <div class="adm-top">
+      <button class="adm-ham" onclick="toggleAdmDrawer(true)" aria-label="Open admin menu">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+      <div class="adm-top-title">VSD Admin · ${curTitle}</div>
+      <a onclick="toggleAdmDrawer(false);go('')" class="adm-top-store">🌐 Store</a>
+    </div>
+    <div class="adm-backdrop" onclick="toggleAdmDrawer(false)"></div>
+    <div class="adm">
+      <div class="sb">
+        <div class="sb-head">
+          <div class="logo"><img class="brand" src="assets/images/logo.webp" alt="VSD Admin" style="height:54px"></div>
+          <button class="sb-close" onclick="toggleAdmDrawer(false)" aria-label="Close menu">×</button>
+        </div>
+        ${M.map((m) => `<a class="${pg == m[0] ? 'on' : ''}" onclick="toggleAdmDrawer(false);go('admin/${m[0]}')">${m[1]}</a>`).join('')}
+        <a onclick="toggleAdmDrawer(false);go('')">🌐 View store</a>
+        <a onclick="toggleAdmDrawer(false);logout()">🚪 Logout</a>
+      </div>
+      <div class="ct">${fn()}</div>
+    </div>
+    <nav class="adm-bottom-nav">
+      <button class="abn-item ${pg === 'prods' ? 'on' : ''}" onclick="pf(0)">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+        <span>Add Product</span>
+      </button>
+      <button class="abn-item ${pg === 'dash' ? 'on' : ''}" onclick="go('admin/dash')">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="9" rx="1"/>
+          <rect x="14" y="3" width="7" height="5" rx="1"/>
+          <rect x="14" y="12" width="7" height="9" rx="1"/>
+          <rect x="3" y="16" width="7" height="5" rx="1"/>
+        </svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="abn-item ${pg === 'combos' ? 'on' : ''}" onclick="cf(0)">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+          <line x1="12" y1="22.08" x2="12" y2="12"/>
+        </svg>
+        <span>Create Combo</span>
+      </button>
+      <button class="abn-item ${pg === 'giftboxes' ? 'on' : ''}" onclick="gbModal(0)">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 12 20 22 4 22 4 12"/>
+          <rect x="2" y="7" width="20" height="5"/>
+          <line x1="12" y1="22" x2="12" y2="7"/>
+          <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+          <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+        </svg>
+        <span>Create Gift Box</span>
+      </button>
+    </nav>
+  `;
 }
 function login() {
   api('/api/admin/login', {
@@ -58,6 +134,7 @@ function login() {
     .catch((e) => toast(e.message));
 }
 function logout() {
+  toggleAdmDrawer(false);
   api('/api/admin/logout', { method: 'POST' }).finally(() => {
     adm = false;
     D.orders = [];
