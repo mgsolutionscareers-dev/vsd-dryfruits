@@ -86,11 +86,12 @@ document.addEventListener('click', (e) => {
 });
 boot();
 
-/*
- * HERO AUTO-SLIDE REMOVED.
- * The banner now changes only when the visitor clicks the arrows / dots
- * (or swipes on mobile). Nothing changes by itself.
- */
+// setInterval(() => {
+//   if (!document.hidden && D.banners.filter((x) => x.on).length > 1 && $('#hero') && Date.now() > hpause) {
+//     hi++;
+//     hup();
+//   }
+// }, 5000);
 
 /** Start-up: load the catalogue from the server, check for an admin session, then draw the page. */
 async function boot() {

@@ -1716,3 +1716,42 @@ body.no-scroll {
   z-index: 120 !important;
   bottom: calc(75px + env(safe-area-inset-bottom, 0px)) !important;
 }
+
+/* Hero slider arrows */
+.hero {
+  position: relative;
+}
+.harr {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.harr:hover {
+  background: rgba(0, 0, 0, 0.85);
+}
+.harr-l {
+  left: 12px;
+}
+.harr-r {
+  right: 12px;
+}
+@media (max-width: 700px) {
+  .harr {
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+  }
+}
